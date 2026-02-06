@@ -19,9 +19,9 @@ Add `wamp` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
-  [
-    {:wamp, "~> 0.1.0"}
-  ]
+    [
+        {:wamp, "~> 0.1.0"}
+    ]
 end
 ```
 
@@ -33,8 +33,8 @@ The router is the central component that manages client sessions and coordinates
 
 ```elixir
 defmodule MyApp.Router do
-  use Wamp.Router,
-    otp_app: :my_app
+    use Wamp.Router,
+        otp_app: :my_app
 end
 ```
 
@@ -44,15 +44,15 @@ Clients connect to a router and can act as callers, callees, publishers, and sub
 
 ```elixir
 defmodule MyApp.Client do
-  use Wamp.Client,
-    otp_app: :my_app
+    use Wamp.Client,
+        otp_app: :my_app
 
-  # Auto-register procedures on connect
-  procedure "com.myapp.add", MyApp.Math, :add
-  procedure "com.myapp.multiply", MyApp.Math, :multiply
+    # Auto-register procedures on connect
+    procedure "com.myapp.add", MyApp.Math, :add
+    procedure "com.myapp.multiply", MyApp.Math, :multiply
 
-  # Auto-subscribe to topics on connect
-  channel "com.myapp.events", MyApp.EventHandler
+    # Auto-subscribe to topics on connect
+    channel "com.myapp.events", MyApp.EventHandler
 end
 ```
 
@@ -62,13 +62,13 @@ Procedure handler functions receive `(args, kwargs, details)`:
 
 ```elixir
 defmodule MyApp.Math do
-  def add(args, _kwargs, _details) do
-    Enum.sum(args)
-  end
+    def add(args, _kwargs, _details) do
+        Enum.sum(args)
+    end
 
-  def multiply([a, b], _kwargs, _details) do
-    a * b
-  end
+    def multiply([a, b], _kwargs, _details) do
+        a * b
+    end
 end
 ```
 
@@ -76,12 +76,12 @@ end
 
 ```elixir
 defmodule MyApp.EventHandler do
-  use Wamp.Subscriber
+    use Wamp.Subscriber
 
-  def handle_event({_pubid, _details, args, kwargs}, sub) do
-    IO.inspect(args, label: "Event received")
-    {:noreply, sub}
-  end
+    def handle_event({_pubid, _details, args, kwargs}, sub) do
+        IO.inspect(args, label: "Event received")
+        {:noreply, sub}
+    end
 end
 ```
 
@@ -90,19 +90,19 @@ end
 ```elixir
 # config/config.exs
 config :my_app, MyApp.Router,
-  realm: "realm1"
+    realm: "realm1"
 
 config :my_app, MyApp.Client,
-  realm: "realm1",
-  router: MyApp.Router
+    realm: "realm1",
+    router: MyApp.Router
 ```
 
 Add to your supervision tree:
 
 ```elixir
 children = [
-  {MyApp.Router, realm: "realm1"},
-  {MyApp.Client, realm: "realm1", router: MyApp.Router}
+    {MyApp.Router, realm: "realm1"},
+    {MyApp.Client, realm: "realm1", router: MyApp.Router}
 ]
 
 Supervisor.start_link(children, strategy: :one_for_one)
@@ -111,23 +111,23 @@ Supervisor.start_link(children, strategy: :one_for_one)
 ## Architecture
 
 ```
-                    +------------------+
-                    |   Wamp.Router    |
-                    |   (GenServer)    |
-                    +--------+---------+
-                             |
-                 +-----------+-----------+
-                 |                       |
-        +--------v--------+    +--------v--------+
-        | Wamp.PubSub     |    |  Wamp.RPC       |
-        |   .Broker        |    |   .Dealer        |
-        | (GenServer)      |    | (GenServer)      |
-        +---------+--------+    +--------+---------+
-                  |                      |
-          +-------+-------+      +------+------+
-          |               |      |             |
-     Subscribers    Publishers  Callees     Callers
-     (Wamp.Client)             (Wamp.Client)
+                                +------------------+
+                                |   Wamp.Router    |
+                                |   (GenServer)    |
+                                +--------+---------+
+                                         |
+                 +-----------------------+-------------------+
+                 |                                           |
+        +--------v---------+                        +--------v---------+
+        | Wamp.PubSub      |                        |  Wamp.RPC        |
+        |   .Broker        |                        |   .Dealer        |
+        | (GenServer)      |                        | (GenServer)      |
+        +---------+--------+                        +--------+---------+
+                  |                                          |
+          +-------+-------+                           +------+------+
+          |               |                           |             |
+     Subscribers    Publishers                      Callees     Callers
+     (Wamp.Client)                                 (Wamp.Client)
 ```
 
 The library is organized around these core modules:
@@ -158,8 +158,8 @@ request_id = MyApp.Client.call("com.myapp.add", [1, 2])
 
 # Or check if result is ready
 case MyApp.Client.yielded(request_id) do
-  true  -> MyApp.Client.yield(request_id)
-  false -> # still pending
+    true  -> MyApp.Client.yield(request_id)
+    false -> # still pending
 end
 
 # Unregister
@@ -210,13 +210,13 @@ Raise `Wamp.Client.InvocationError` to return a structured error to the caller:
 
 ```elixir
 def divide([a, b], _kwargs, _details) do
-  if b == 0 do
-    raise Wamp.Client.InvocationError,
-      uri: "com.myapp.error.division_by_zero",
-      args: ["Cannot divide by zero"],
-      kwargs: %{}
-  end
-  a / b
+    if b == 0 do
+        raise Wamp.Client.InvocationError,
+            uri: "com.myapp.error.division_by_zero",
+            args: ["Cannot divide by zero"],
+            kwargs: %{}
+    end
+    a / b
 end
 ```
 
@@ -226,13 +226,13 @@ end
 
 ```elixir
 defmodule MyAppWeb.WampTransport do
-  use Wamp.Transport.Phoenix,
-    router: MyApp.Router
+    use Wamp.Transport.Phoenix,
+        router: MyApp.Router
 
-  def connection(socket) do
-    # Perform connection-level authorization here
-    {:ok, socket}
-  end
+    def connection(socket) do
+        # Perform connection-level authorization here
+        {:ok, socket}
+    end
 end
 ```
 
@@ -241,9 +241,9 @@ end
 ```elixir
 # lib/my_app_web/endpoint.ex
 socket "/ws", MyAppWeb.WampTransport,
-  websocket: [
-    subprotocols: ["wamp.2.json", "wamp.2.msgpack"]
-  ]
+    websocket: [
+        subprotocols: ["wamp.2.json", "wamp.2.msgpack"]
+    ]
 ```
 
 The transport supports both JSON and MessagePack serialization, negotiated via WebSocket subprotocol.
@@ -256,25 +256,25 @@ Implement `Wamp.Spec.Broker` to control subscription approval and event filterin
 
 ```elixir
 defmodule MyApp.Broker do
-  @behaviour Wamp.Broker
+    @behaviour Wamp.Broker
 
-  def publish({topic, event}, publisher, subscribers) do
-    # Filter subscribers or reject publication
-    authorized = Enum.filter(subscribers, &authorized?(&1, topic))
-    {:ok, authorized}
-  end
-
-  def subscribe(topic, opts, session) do
-    if can_subscribe?(session, topic) do
-      {:ok, []}  # attributes
-    else
-      {:error, "wamp.error.not_authorized"}
+    def publish({topic, event}, publisher, subscribers) do
+        # Filter subscribers or reject publication
+        authorized = Enum.filter(subscribers, &authorized?(&1, topic))
+        {:ok, authorized}
     end
-  end
 
-  def unsubscribed(_subscription) do
-    :ok
-  end
+    def subscribe(topic, opts, session) do
+        if can_subscribe?(session, topic) do
+            {:ok, []}  # attributes
+        else
+            {:error, "wamp.error.not_authorized"}
+        end
+    end
+
+    def unsubscribed(_subscription) do
+        :ok
+    end
 end
 ```
 
@@ -284,24 +284,24 @@ Implement `Wamp.Spec.Dealer` to control registration approval and procedure sele
 
 ```elixir
 defmodule MyApp.Dealer do
-  @behaviour Wamp.Dealer
+    @behaviour Wamp.Dealer
 
-  def register({uri, opts}, session) do
-    if can_register?(session, uri) do
-      {:ok, nil}  # attributes
-    else
-      {:error, "wamp.error.not_authorized"}
+    def register({uri, opts}, session) do
+        if can_register?(session, uri) do
+            {:ok, nil}  # attributes
+        else
+            {:error, "wamp.error.not_authorized"}
+        end
     end
-  end
 
-  def procedure({uri, call}, caller, procedures) do
-    # Implement load balancing, routing, etc.
-    {:ok, Enum.random(procedures)}
-  end
+    def procedure({uri, call}, caller, procedures) do
+        # Implement load balancing, routing, etc.
+        {:ok, Enum.random(procedures)}
+    end
 
-  def unregistered(_procedure) do
-    :ok
-  end
+    def unregistered(_procedure) do
+        :ok
+    end
 end
 ```
 
@@ -309,10 +309,10 @@ Use your custom modules:
 
 ```elixir
 defmodule MyApp.Router do
-  use Wamp.Router,
-    otp_app: :my_app,
-    broker: MyApp.Broker,
-    dealer: MyApp.Dealer
+    use Wamp.Router,
+        otp_app: :my_app,
+        broker: MyApp.Broker,
+        dealer: MyApp.Dealer
 end
 ```
 
@@ -322,28 +322,28 @@ Override `challenge/1` and `check_challenge/3` in your router:
 
 ```elixir
 defmodule MyApp.Router do
-  use Wamp.Router, otp_app: :my_app
+    use Wamp.Router, otp_app: :my_app
 
-  # Return the auth method and challenge data
-  def challenge(%{id: sid}) do
-    {:ticket, %{}}
-  end
-
-  # Verify the client's response
-  def check_challenge({:ticket, _challenge}, {token, _details}, session) do
-    case verify_token(token) do
-      {:ok, user} ->
-        {:ok, %{
-          authid: user.id,
-          authrole: user.role,
-          authmethod: :ticket,
-          authprovider: :my_app
-        }}
-
-      :error ->
-        {:error, "wamp.error.not_authorized"}
+    # Return the auth method and challenge data
+    def challenge(%{id: sid}) do
+        {:ticket, %{}}
     end
-  end
+
+    # Verify the client's response
+    def check_challenge({:ticket, _challenge}, {token, _details}, session) do
+        case verify_token(token) do
+            {:ok, user} ->
+                {:ok, %{
+                  authid: user.id,
+                  authrole: user.role,
+                  authmethod: :ticket,
+                  authprovider: :my_app
+                }}
+
+            :error ->
+                {:error, "wamp.error.not_authorized"}
+        end
+    end
 end
 ```
 
@@ -390,7 +390,7 @@ MyApp.Router.revoke_registration(registration_id, "administrative action")
 - Publish & Subscribe with filtering
 - Remote Procedure Calls with cancellation
 - Publisher exclusion and identification
-- Subscriber black/white listing
+- Subscriber allow/deny listing
 - Shared procedure registration
 - Registration and subscription revocation
 - Progressive call results (infrastructure)
