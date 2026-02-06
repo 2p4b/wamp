@@ -1,4 +1,46 @@
 defmodule Wamp.Transport.Phoenix do
+    @moduledoc """
+    Phoenix WebSocket transport adapter for WAMP.
+
+    This module bridges `Phoenix.Socket.Transport` with the WAMP router,
+    handling WebSocket connections, protocol negotiation, and message
+    serialization/deserialization.
+
+    ## Supported Subprotocols
+
+      * `wamp.2.json` - JSON serialization (default)
+      * `wamp.2.msgpack` - MessagePack binary serialization
+
+    ## Usage
+
+    Define a transport module:
+
+        defmodule MyApp.WampTransport do
+          use Wamp.Transport.Phoenix,
+            router: MyApp.Router
+
+          def connection(socket) do
+            {:ok, socket}
+          end
+        end
+
+    Then configure it in your Phoenix endpoint:
+
+        socket "/ws", MyApp.WampTransport,
+          websocket: [
+            subprotocols: ["wamp.2.json", "wamp.2.msgpack"]
+          ]
+
+    ## Options
+
+      * `:router` - the router module to forward WAMP messages to (required)
+
+    ## Connection Callback
+
+    Your transport module must implement a `connection/1` callback that receives
+    the socket map and returns `{:ok, conn}` or `{:error, reason}`. Use this to
+    perform connection-level authorization or attach metadata.
+    """
 
     use Wamp.Spec
 
@@ -49,11 +91,13 @@ defmodule Wamp.Transport.Phoenix do
 
     end
 
+    @doc false
     def __child_spec__(_opts) do
         # We won't spawn any process, so let's return a dummy task
         %{id: Task, start: {Task, :start_link, [fn -> :ok end]}, restart: :transient}
     end
 
+    @doc false
     def __connect__(transport, map) do
         # Callback to retrieve relevant data from the connection.
         # The map contains options, params, transport and endpoint keys.
@@ -87,6 +131,7 @@ defmodule Wamp.Transport.Phoenix do
         end
     end
 
+    @doc false
     def __init__(state) do
         # Now we are effectively inside the process that maintains the socket.
         {:ok, state}
@@ -104,7 +149,7 @@ defmodule Wamp.Transport.Phoenix do
 
     defp decode({:msgpack, payload}) do
         payload
-        |> MessagePack.unpack()
+        |> Msgpax.unpack()
     end
 
     defp encode({:text, payload}) do
@@ -119,9 +164,10 @@ defmodule Wamp.Transport.Phoenix do
 
     defp encode({:msgpack, payload}) do
         payload
-        |> MessagePack.pack()
+        |> Msgpax.pack()
     end
 
+    @doc false
     def __handle_in__(router, data, state) do
 
         with {:ok, message} <- decode({state.socket.protocol, data}) do
@@ -147,6 +193,7 @@ defmodule Wamp.Transport.Phoenix do
     end
 
 
+    @doc false
     def __push_message__(message, state) when is_list(message) do
 
         {:ok, data } = encode({state.socket.protocol, message})

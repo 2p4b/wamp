@@ -1,22 +1,47 @@
 defmodule Wamp.Task do
+    @moduledoc """
+    GenServer for managing request-specific message queuing and result handling.
+
+    A task process is created per request and queues incoming result and yield
+    messages. It provides blocking `yield/1` and `await/1` functions to
+    consume results.
+
+    ## Fields
+
+      * `:pid` - (required) the task process PID
+      * `:owner` - (required) the owning process PID
+      * `:request` - (required) the request ID this task handles
+      * `:queue` - message queue of `{:result, msg}` and `{:yield, msg}` tuples
+    """
 
     @enforce_keys [:pid, :owner, :request]
 
-    defstruct [ 
-        :pid, 
-        :owner, 
+    defstruct [
+        :pid,
+        :owner,
         :request,
         queue: [],
     ]
 
     use GenServer
 
+    @doc """
+    Returns the registered process name for the given request ID.
+    """
     def name(request) do
         request
         |> Integer.to_string()
         |> String.to_atom()
     end
 
+    @doc """
+    Starts a task process linked to the calling process.
+
+    ## Options
+
+      * `:request` - (required) the request ID
+      * `:owner` - (required) the owning process PID
+    """
     def start_link(default) do
         request =  Keyword.get(default, :request)
         GenServer.start_link(__MODULE__, default, name: name(request) )
@@ -83,12 +108,21 @@ defmodule Wamp.Task do
         end
     end
 
+    @doc """
+    Creates a new task process for the given request and returns its state.
+    """
     def start(request) do
-        with {:ok, pid} <- __MODULE__.start_link([request: request, owner: self]) do
+        with {:ok, pid} <- __MODULE__.start_link([request: request, owner: self()]) do
             GenServer.call(pid, :state)
         end
     end
 
+    @doc """
+    Blocks until the next message is available in the queue and returns it.
+
+    If the message is a `:result`, the task process is shut down.
+    If the message is a `:yield`, it is returned and the task continues.
+    """
     def yield(%Wamp.Task{pid: pid} = task) when is_pid(pid) do
         ensure_alive(task)
         size = GenServer.call(pid, :size)
@@ -105,6 +139,11 @@ defmodule Wamp.Task do
         end
     end
 
+    @doc """
+    Blocks until the task process is complete, returning the final result.
+
+    Repeatedly calls `yield/1` until the task process is no longer alive.
+    """
     def await(%Wamp.Task{pid: pid} = task) when is_pid(pid) do
         result = yield(task)
         if Process.alive?(pid) do

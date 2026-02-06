@@ -1,9 +1,45 @@
 defmodule Wamp.PubSub.Broker do
+    @moduledoc """
+    GenServer that manages publish/subscribe messaging within a WAMP realm.
+
+    The broker handles topic subscriptions, event publishing, and subscriber
+    filtering. It is started automatically by the router.
+
+    ## Features
+
+      * Publisher exclusion (`exclude_me`)
+      * Publisher identification (`disclose_me`)
+      * Subscriber black/white listing by session ID, auth ID, or auth role
+      * Subscription revocation (server-initiated)
+      * Publication acknowledgment
+      * Session and subscription meta APIs
+
+    ## Subscriber Filtering
+
+    When publishing, the following options control which subscribers receive events:
+
+      * `"exclude_me"` - exclude the publisher (default: `true`)
+      * `"eligible"` - list of session IDs to include
+      * `"exclude"` - list of session IDs to exclude
+      * `"eligible_authid"` - list of auth IDs to include
+      * `"eligible_authrole"` - list of auth roles to include
+      * `"exclude_authid"` - list of auth IDs to exclude
+      * `"exclude_authrole"` - list of auth roles to exclude
+
+    ## Custom Broker
+
+    The actual subscription approval logic is delegated to a custom broker module
+    that implements the `Wamp.Spec.Broker` behaviour. See `Wamp.Example.Broker`
+    for a reference implementation.
+    """
 
     use GenServer
 
     use Wamp.Spec
 
+    @doc """
+    Returns the broker feature flags as a map.
+    """
     def features(_session) do
         %{
             "event_retention" => false,
@@ -19,8 +55,17 @@ defmodule Wamp.PubSub.Broker do
         }
     end
 
+    @doc """
+    Starts the broker process linked to the calling process.
+
+    ## Options
+
+      * `:realm` - (required) the WAMP realm name
+      * `:router` - the router PID
+      * `:broker` - the custom broker module
+    """
     def start_link(default) do
-        name = 
+        name =
             default
             |> Keyword.get(:realm)
             |> Wamp.Router.broker_name()
@@ -392,13 +437,20 @@ defmodule Wamp.PubSub.Broker do
         end
     end
 
-    def find_subscription(state, subid, opts \\ []) 
+    @doc """
+    Finds a subscription by its ID across all topics.
+
+    Returns `{topic, index}` if found, or `nil` if not found.
+    Accepts optional keyword list of additional property filters.
+    """
+    def find_subscription(state, subid, opts \\ [])
     when is_integer(subid) do
         subscriptions = Map.get(state, :subscriptions)
         find_subscription(subscriptions, subid, Map.keys(subscriptions), opts)
     end
 
-    def find_subscription(subscriptions, subid, [topic | topics], opts) 
+    @doc false
+    def find_subscription(subscriptions, subid, [topic | topics], opts)
     when is_integer(subid) do
         index = 
             subscriptions
@@ -417,14 +469,17 @@ defmodule Wamp.PubSub.Broker do
         end
     end
 
+    @doc false
     def find_subscription(_subs, _subid, [], _opts) do
         nil
     end
 
+    @doc false
     def match_true(_sub, []) do
         true
     end
 
+    @doc false
     def match_true(sub, [{prop, value} | opts]) do
         if Map.get(sub, prop) == value do
             match_true(sub, opts)
@@ -433,6 +488,10 @@ defmodule Wamp.PubSub.Broker do
         end
     end
 
+    @doc """
+    Updates the subscriptions for a topic. Removes the topic key if the
+    subscription list is empty.
+    """
     def update_subscriptions(state, topic, []) do
         state
         |> Map.update!(:subscriptions, &Map.delete(&1, topic))
@@ -443,6 +502,13 @@ defmodule Wamp.PubSub.Broker do
         |> Map.update!(:subscriptions, &Map.put(&1, topic, subscriptions))
     end
 
+    @doc """
+    Processes a subscription request by delegating to the custom broker module.
+
+    Called in a separate task to avoid blocking the broker's message queue.
+    On approval, the subscription is confirmed and the client is notified.
+    On rejection, the client receives an error.
+    """
     def subscribe(server, broker, {topic, options, session}) do
         case apply(broker, :subscribe, [topic, options, session]) do
 

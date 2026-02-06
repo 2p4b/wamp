@@ -1,4 +1,11 @@
 defmodule Wamp.Example.Client do
+    @moduledoc """
+    Example WAMP client that registers math procedures and subscribes
+    to a session events channel.
+
+    Demonstrates the `procedure` and `channel` macros for auto-registration
+    on connect.
+    """
 
     use Wamp.Client,
         otp_app: :web

@@ -1,4 +1,27 @@
 defmodule Wamp.RPC.Dealer do
+    @moduledoc """
+    GenServer that manages remote procedure call routing within a WAMP realm.
+
+    The dealer handles procedure registration, invocation routing, result
+    forwarding, and call cancellation. It is started automatically by the router.
+
+    ## Features
+
+      * Caller identification (`disclose_me`)
+      * Call cancellation with modes: `"skip"`, `"kill"`, `"killnowait"`
+      * Shared procedure registration
+      * Registration revocation (server-initiated)
+      * Progressive call results
+      * Session, registration, and testament meta APIs
+
+    ## Custom Dealer
+
+    The procedure registration approval and invocation routing logic is delegated
+    to a custom dealer module that implements the `Wamp.Spec.Dealer` behaviour.
+    The dealer module's `procedure/3` callback selects which registered callee
+    should handle a given call. See `Wamp.Example.Dealer` for a reference
+    implementation.
+    """
 
     use Wamp.Spec
 
@@ -15,6 +38,9 @@ defmodule Wamp.RPC.Dealer do
         publication_count: 0,
     ]
 
+    @doc """
+    Returns the dealer feature flags as a map.
+    """
     def features(_session) do
         %{
             "call_canceling" => true,
@@ -31,8 +57,17 @@ defmodule Wamp.RPC.Dealer do
         }
     end
 
+    @doc """
+    Starts the dealer process linked to the calling process.
+
+    ## Options
+
+      * `:realm` - (required) the WAMP realm name
+      * `:router` - the router PID
+      * `:dealer` - the custom dealer module
+    """
     def start_link(default) do
-        name = 
+        name =
             default
             |> Keyword.get(:realm)
             |> Wamp.Router.dealer_name()
@@ -577,11 +612,18 @@ defmodule Wamp.RPC.Dealer do
         {:reply, features(session), state}
     end
 
+    @doc """
+    Finds a procedure registration by its ID across all URIs.
+
+    Returns `{uri, index}` if found, or `nil` if not found.
+    Accepts optional keyword list of additional property filters.
+    """
     def find_procedure(state, regid, opts \\ []) do
         procs = Map.get(state, :procedures)
         find_procedure(procs, regid, Map.keys(procs), opts)
     end
 
+    @doc false
     def find_procedure(procedures, regid, [uri | uris], opts) do
         index = 
             procedures
@@ -600,14 +642,17 @@ defmodule Wamp.RPC.Dealer do
         end
     end
 
+    @doc false
     def find_procedure(_procs, _regid, [], _opts) do
         nil
     end
 
+    @doc false
     def match_true(_proc, []) do
         true
     end
 
+    @doc false
     def match_true(proc, [{prop, value} | opts]) do
         if Map.get(proc, prop) == value do
             match_true(proc, opts)
@@ -616,6 +661,10 @@ defmodule Wamp.RPC.Dealer do
         end
     end
 
+    @doc """
+    Updates the procedures for a URI. Removes the URI key if the
+    procedure list is empty.
+    """
     def update_procedures(state, uri, []) do
         state
         |> Map.update!(:procedures, &Map.delete(&1, uri))
@@ -631,6 +680,13 @@ defmodule Wamp.RPC.Dealer do
         {id, Map.update!(state, :next_id, &(&1 + 1))}
     end
 
+    @doc """
+    Processes a registration request by delegating to the custom dealer module.
+
+    Called in a separate task to avoid blocking the dealer's message queue.
+    On approval, the registration is confirmed and the client is notified.
+    On rejection, the client receives an error.
+    """
     def register(server, dealer, { uri, opts, session }) do
         case apply(dealer, :register, [{uri, opts}, session]) do
 

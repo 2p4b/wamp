@@ -1,12 +1,114 @@
 defmodule Wamp.Client do
+    @moduledoc """
+    WAMP client implementation supporting all four WAMP roles: caller, callee,
+    publisher, and subscriber.
+
+    A client connects to a router, joins a realm, and can then perform pub/sub
+    and RPC operations.
+
+    ## Usage
+
+    Define a client module:
+
+        defmodule MyApp.Client do
+          use Wamp.Client, otp_app: :my_app
+
+          # Auto-register procedures on connect
+          procedure "math.add", MyApp.Math, :add
+          procedure "math.multiply", MyApp.Math, :multiply
+
+          # Auto-subscribe to topics on connect
+          channel "events.user", MyApp.UserSubscriber
+        end
+
+    ## Configuration
+
+        config :my_app, MyApp.Client,
+          realm: "realm1",
+          router: MyApp.Router
+
+    ## Macros
+
+      * `procedure(uri, module, function)` - Register a procedure handler that is
+        automatically registered when the client connects
+      * `channel(uri, subscriber_module)` - Subscribe to a topic that is
+        automatically subscribed when the client connects
+
+    ## Public Functions (injected via `use`)
+
+    ### Connection
+
+      * `start_link/1` - Start and connect the client
+      * `state/1` - Get client state or a specific section
+      * `goodbye/1` - Gracefully disconnect from the router
+
+    ### Remote Procedure Calls
+
+      * `call/2` - Call a procedure with positional args
+      * `call/2` - Call a procedure with keyword args (map)
+      * `call/3` - Call a procedure with both args and kwargs
+      * `register/3` - Register a procedure handler
+      * `unregister/1` - Unregister a procedure
+      * `registered/1` - Check if a procedure is registered
+      * `yield/1` - Get the result of a call
+      * `yielded/1` - Check if a call result is ready
+      * `await/1` - Block until a call result is available
+
+    ### Publish & Subscribe
+
+      * `subscribe/2` - Subscribe to a topic
+      * `unsubscribe/1` - Unsubscribe from a topic
+      * `subscribed/1` - Check if subscribed to a topic
+      * `subscriptions/0` - List all subscriptions
+      * `publish/2` - Publish an event (fire-and-forget)
+      * `publish/3` - Publish with kwargs
+      * `publish/4` - Publish with kwargs and options
+      * `ack_publish/2` - Publish and wait for acknowledgment
+
+    ## Procedure Handlers
+
+    Procedure handlers are `{module, function}` tuples. The function receives
+    `(args, kwargs, details)` and should return the result value. Raise
+    `Wamp.Client.InvocationError` to return a WAMP error:
+
+        def add(args, _kwargs, _details) do
+          Enum.sum(args)
+        end
+
+        def divide([a, b], _kwargs, _details) do
+          if b == 0 do
+            raise Wamp.Client.InvocationError,
+              uri: "com.error.division_by_zero",
+              args: ["Cannot divide by zero"]
+          end
+          a / b
+        end
+    """
 
     use Wamp.Spec
 
     defmodule InvocationError do
+        @moduledoc """
+        Exception raised within procedure handlers to return a WAMP error
+        to the caller.
+
+        ## Fields
+
+          * `:uri` - error URI (default: `"wamp.invocation.error"`)
+          * `:args` - positional error arguments (default: `[]`)
+          * `:kwargs` - keyword error arguments (default: `%{}`)
+
+        ## Usage
+
+            raise Wamp.Client.InvocationError,
+              uri: "com.error.not_found",
+              args: ["Resource not found"],
+              kwargs: %{"id" => 42}
+        """
 
         defexception [
-            uri: "wamp.invocation.error", 
-            args: [], 
+            uri: "wamp.invocation.error",
+            args: [],
             kwargs: %{}
         ]
 
@@ -642,6 +744,16 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc """
+    Registers a procedure to be automatically registered when the client connects.
+
+    The function must accept `(args, kwargs, details)` as arguments and return
+    the result value.
+
+    ## Example
+
+        procedure "com.example.add", MyApp.Math, :add
+    """
     defmacro procedure(uri, module, fun) do
         module = tear_alias(module)
         quote do
@@ -649,6 +761,14 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc """
+    Subscribes to a topic channel that is automatically subscribed when the
+    client connects. The subscriber module must `use Wamp.Subscriber`.
+
+    ## Example
+
+        channel "events.chat", MyApp.ChatSubscriber
+    """
     defmacro channel(uri, module) do
         module = tear_alias(module)
         quote do
@@ -656,6 +776,7 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc false
     defmacro __before_compile__(_env) do
 
         quote do
@@ -677,6 +798,7 @@ defmodule Wamp.Client do
 
     defp tear_alias(other), do: other
 
+    @doc false
     def __welcome__({sid, details}, {procedures, channels}, state) do
 
         state = 
@@ -704,6 +826,7 @@ defmodule Wamp.Client do
         state
     end
 
+    @doc false
     def __await__(client, request, current, next) do
         case GenServer.call(client, {next, request}) do
             {^current, _} ->
@@ -713,6 +836,7 @@ defmodule Wamp.Client do
     end
 
 
+    @doc false
     def __handle_connect__(state, conn) do
         realm = Map.get(state, :realm)
         roles = Map.get(state, :roles)
@@ -722,6 +846,7 @@ defmodule Wamp.Client do
         {{:ok, state.status}, state}
     end
 
+    @doc false
     def __handle_call__({uri, opts, args, kwargs}, state) do
         { request, state } = next_id(state)
 
@@ -744,6 +869,7 @@ defmodule Wamp.Client do
         {request, state}
     end
 
+    @doc false
     def __handle_publish__({topic, opts, args, kwargs}, state) do
         { request, state } = next_id(state)
 
@@ -770,6 +896,7 @@ defmodule Wamp.Client do
         {request, state}
     end
 
+    @doc false
     def __handle_unregister__(uri, state) do
         index = 
             Map.get(state, :procedures)
@@ -804,6 +931,7 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc false
     def __handle_subscribe__({topic, opts, subscriber}, state) do
         { request, state } = next_id(state)
 
@@ -827,6 +955,7 @@ defmodule Wamp.Client do
         {request, state}
     end
 
+    @doc false
     def __handle_unsubscribe__(topic, state) do
         index = 
             Map.get(state, :subscriptions)
@@ -865,6 +994,7 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc false
     def __handle_register__({uri, opts, handler}, state) do
         { request, state } = next_id(state)
 
@@ -886,6 +1016,7 @@ defmodule Wamp.Client do
         {request, state}
     end
 
+    @doc false
     def __handle_yield__({res, pid}, state) do
         index =
             state
@@ -938,6 +1069,7 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc false
     def __handle_registered__(uri, state) do
         proc  =
             state
@@ -963,6 +1095,7 @@ defmodule Wamp.Client do
         {registered, state}
     end
 
+    @doc false
     def __handle_subscribed__(topic, state) do
         sub =
             state
@@ -987,6 +1120,7 @@ defmodule Wamp.Client do
         {subscribed, state}
     end
 
+    @doc false
     def __handle_call_status__(request, state) do
         call =
             state
@@ -1003,6 +1137,7 @@ defmodule Wamp.Client do
         {status, state}
     end
 
+    @doc false
     def __handle_event_status__(request, state) do
         event =
             state
@@ -1019,6 +1154,7 @@ defmodule Wamp.Client do
         {status, state}
     end
 
+    @doc false
     def __handle_yield_publication__(request, state) do
         index =
             state
@@ -1054,6 +1190,7 @@ defmodule Wamp.Client do
 
     end
 
+    @doc false
     def __handle_yield_result__(request, state) do
         index =
             state
@@ -1077,6 +1214,7 @@ defmodule Wamp.Client do
 
     end
 
+    @doc false
     def __handle_goodbye__(reason, state) do
         state = 
             state
@@ -1092,18 +1230,21 @@ defmodule Wamp.Client do
         {{:ok, :disconnected}, send_request(state, payload)}
     end
 
+    @doc false
     def __challenge__(state) do
         reason = "wamp.error.cannot_authenticate"
         payload = [@abort, %{}, reason]
         {reason, send_request(state, payload)}
     end
 
+    @doc false
     def __goodbye__(state) do
         uri = "wamp.close.goodbye_and_out"
         payload = [@goodbye, %{}, uri]
         {uri, send_request(state, payload)}
     end
 
+    @doc false
     def __published__({request, pubid}, state) do
         index =
             state
@@ -1126,6 +1267,7 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc false
     def __subscribed__({request, subid}, state) do
         index = 
             Map.get(state, :subscriptions)
@@ -1172,6 +1314,7 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc false
     def __down__(ref, state) do
         index = 
             Map.get(state, :subscriptions)
@@ -1207,6 +1350,7 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc false
     def __call_error__({request, uri, args, kwargs}, state) do
         index = 
             state
@@ -1229,6 +1373,7 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc false
     def __publish_error__({request, details, uri}, state) do
         index =
             state
@@ -1250,6 +1395,7 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc false
     def __subscribe_error__({request, _details, uri}, state) do
         index = 
             Map.get(state, :subscriptions)
@@ -1276,6 +1422,7 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc false
     def __register_error__({request, _details, uri}, state) do
         index = 
             Map.get(state, :procedures)
@@ -1300,6 +1447,7 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc false
     def __interrupt__({req, _details}, state) do
         index =
             state
@@ -1332,6 +1480,7 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc false
     def __invocation__(client, {req, id, details, args, kwargs}, state) do
         proc = 
             Map.get(state, :procedures)
@@ -1369,6 +1518,7 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc false
     def __event__({subid, pubid, details, args, kwargs}, state) do
         index = 
             state
@@ -1388,6 +1538,7 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc false
     def __unsubscribed__({subid, reason}, state) do
         index = 
             state
@@ -1413,6 +1564,7 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc false
     def __unsubscribed__(request, state) do
         index = 
             Map.get(state, :subscriptions)
@@ -1433,6 +1585,7 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc false
     def __registered__({request, regid}, state) do
         index = 
             Map.get(state, :procedures)
@@ -1458,6 +1611,7 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc false
     def __unregistered__({regid, _reason}, state) do
         index = 
             state
@@ -1478,6 +1632,7 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc false
     def __unregistered__(request, state) when is_integer(request) do
         index = 
             Map.get(state, :procedures)
@@ -1502,6 +1657,7 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc false
     def __result__({request, _details, args, kwargs}, state) do
         index =
             state
@@ -1522,6 +1678,7 @@ defmodule Wamp.Client do
         end
     end
 
+    @doc false
     def invoke(client, proc, details, args, kwargs) do
 
         {module, fun} = proc.handler

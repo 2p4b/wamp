@@ -1,4 +1,79 @@
 defmodule Wamp.Router do
+    @moduledoc """
+    The WAMP router (gateway) that manages sessions, routing messages between
+    clients and the broker/dealer infrastructure.
+
+    The router is the central component that:
+
+      * Accepts client connections and manages session lifecycle
+      * Handles authentication (challenge-response)
+      * Routes PubSub messages to the `Wamp.PubSub.Broker`
+      * Routes RPC messages to the `Wamp.RPC.Dealer`
+      * Monitors client processes and cleans up on disconnection
+
+    ## Usage
+
+    Define a router module using the `use Wamp.Router` macro:
+
+        defmodule MyApp.Router do
+          use Wamp.Router,
+            otp_app: :my_app,
+            broker: MyApp.Broker,
+            dealer: MyApp.Dealer
+        end
+
+    ## Options
+
+      * `:otp_app` - the OTP application for configuration lookup
+      * `:broker` - custom broker module implementing `Wamp.Spec.Broker`
+        (default: `Wamp.Example.Broker`)
+      * `:dealer` - custom dealer module implementing `Wamp.Spec.Dealer`
+        (default: `Wamp.Example.Dealer`)
+
+    ## Configuration
+
+        # config/config.exs
+        config :my_app, MyApp.Router,
+          realm: "realm1"
+
+    Or pass options directly to `start_link/1`:
+
+        MyApp.Router.start_link(realm: "realm1")
+
+    ## Authentication
+
+    Override `challenge/1` and `check_challenge/3` to implement custom authentication:
+
+        defmodule MyApp.Router do
+          use Wamp.Router, otp_app: :my_app
+
+          def challenge(%{id: sid}) do
+            {:ticket, %{}}
+          end
+
+          def check_challenge({:ticket, _challenge}, {token, _details}, session) do
+            if valid_token?(token) do
+              {:ok, %{authid: session.id, authrole: :user,
+                       authmethod: :ticket, authprovider: :my_app}}
+            else
+              {:error, "wamp.error.not_authorized"}
+            end
+          end
+        end
+
+    The default implementation uses anonymous authentication.
+
+    ## Public Functions (injected via `use`)
+
+      * `start_link/1` - Start the router with the given options (requires `:realm`)
+      * `state/1` - Get router state or a specific property
+      * `get/1` - Get a specific state property
+      * `subscriptions/1` - List subscriptions, optionally filtered by topic
+      * `procedures/1` - List procedures, optionally filtered by URI
+      * `invocations/0` - List active RPC invocations
+      * `revoke_subscription/2` - Revoke a subscription by ID
+      * `revoke_registration/2` - Revoke a procedure registration by ID
+    """
 
     @version "0.1.0"
 
@@ -143,7 +218,7 @@ defmodule Wamp.Router do
             @impl true
             def handle_info({[@cancel, req, opts], from}, state) do
                 args = [[req, opts], {__MODULE__, from}, state]
-                {:noreply, apply(Wamp.Router, :__error__, args)}
+                {:noreply, apply(Wamp.Router, :__cancel__, args)}
             end
 
             @impl true
@@ -357,6 +432,7 @@ defmodule Wamp.Router do
 
     end
 
+    @doc false
     defp tear_alias({:__aliases__, meta, [h|t]}) do
         alias = {:__aliases__, meta, [h]}
         quote do
@@ -366,16 +442,33 @@ defmodule Wamp.Router do
 
     defp tear_alias(other), do: other
 
+    @doc """
+    Returns the registered process name for the dealer of the given realm.
+
+    ## Examples
+
+        iex> Wamp.Router.dealer_name("realm1")
+        :"wamp.realm1.dealer"
+    """
     def dealer_name(realm) when is_binary(realm) do
         "wamp." <> realm <> ".dealer"
         |> String.to_atom()
     end
 
+    @doc """
+    Returns the registered process name for the broker of the given realm.
+
+    ## Examples
+
+        iex> Wamp.Router.broker_name("realm1")
+        :"wamp.realm1.broker"
+    """
     def broker_name(realm) when is_binary(realm) do
         "wamp." <> realm <> ".broker"
         |> String.to_atom()
     end
 
+    @doc false
     def __hello__([realm, details, conn], {router, from}, state) do
         with {:ok, session} <- fetch_session(state, from) do
             send(session.pid, protocol_violation())
@@ -401,6 +494,7 @@ defmodule Wamp.Router do
         end
     end
 
+    @doc false
     def __authorize__(%{id: sid} = session, router) do
         case apply(router, :challenge, [session]) do
             {:anonymous, %{authid: _, authrole: _, authmethod: :anonymous, authprovider: _} = details} ->
@@ -421,6 +515,7 @@ defmodule Wamp.Router do
         end
     end
 
+    @doc false
     def __authenticate__([token, details], {router, from}, state) do
         case fetch_session(state, from) do
 
@@ -439,6 +534,7 @@ defmodule Wamp.Router do
 
     end
 
+    @doc false
     def __check_challenge__(router, answer, session) do
 
         {challenge, session} = 
@@ -462,6 +558,7 @@ defmodule Wamp.Router do
 
     end
 
+    @doc false
     def __subscribe__([req, opts, topic], {_, from}, state) do
         case fetch_authorized_session(state, from) do
 
@@ -478,6 +575,7 @@ defmodule Wamp.Router do
         end
     end
 
+    @doc false
     def __publish__([req, opts, topic, args, kwargs], {_, from}, state) do
         case fetch_authorized_session(state, from) do
 
@@ -494,6 +592,7 @@ defmodule Wamp.Router do
         end
     end
 
+    @doc false
     def __unsubscribe__([req, subid], {_, from}, state) do
         case fetch_authorized_session(state, from) do
 
@@ -510,6 +609,7 @@ defmodule Wamp.Router do
         end
     end
 
+    @doc false
     def __register__([req, options, uri], {_, from}, state) do
         case fetch_authorized_session(state, from) do
             {:ok, session} ->
@@ -526,6 +626,7 @@ defmodule Wamp.Router do
         end
     end
 
+    @doc false
     def __unregister__([req, regid], {_, from}, state) do
         case fetch_authorized_session(state, from) do
             {:ok, session} ->
@@ -542,6 +643,7 @@ defmodule Wamp.Router do
         end
     end
 
+    @doc false
     def __call__([req, options, uri, args, kwargs], {_, from}, state) do
         case fetch_authorized_session(state, from) do
             {:ok, session} ->
@@ -558,6 +660,7 @@ defmodule Wamp.Router do
         end
     end
 
+    @doc false
     def __yield__([req, options, args, kwargs], {_, from}, state) do
         case fetch_authorized_session(state, from) do
             {:ok, session} ->
@@ -574,6 +677,7 @@ defmodule Wamp.Router do
         end
     end
 
+    @doc false
     def __cancel__([req, options], {_, from}, state) do
         case fetch_authorized_session(state, from) do
             {:ok, session} ->
@@ -589,6 +693,7 @@ defmodule Wamp.Router do
         end
     end
 
+    @doc false
     def __error__([@invocation, req, otps, uri, args, kwargs], {_, from}, state) do
         case fetch_authorized_session(state, from) do
             {:ok, session} ->
@@ -604,6 +709,7 @@ defmodule Wamp.Router do
         end
     end
 
+    @doc false
     def __goodbye__([_details, _reason], {_, from}, state) do
         case fetch_authorized_session(state, from) do
 
@@ -620,6 +726,7 @@ defmodule Wamp.Router do
         end
     end
 
+    @doc false
     def __abort__([_details, _reason], {_, from}, state) do
         session = get_session(state, from)
 
@@ -630,6 +737,7 @@ defmodule Wamp.Router do
         end
     end
 
+    @doc false
     def __session_down__({ref, _reason}, state) do
         session = 
             Map.get(state, :sessions)
@@ -645,6 +753,7 @@ defmodule Wamp.Router do
         end
     end
 
+    @doc false
     def __challenge__({method, sid, challenge}, state) do
 
         index = 
@@ -680,6 +789,7 @@ defmodule Wamp.Router do
         end
     end
 
+    @doc false
     def __welcome__({sid, auth}, state) do
 
         index = 
@@ -732,6 +842,7 @@ defmodule Wamp.Router do
         end
     end
 
+    @doc false
     def __push__({sid, payload}, state) do
 
         session = 
@@ -748,6 +859,7 @@ defmodule Wamp.Router do
         state
     end
 
+    @doc false
     def __push__(events, state) when is_list(events) do
 
         Enum.each(events, fn {sid, payload} -> 
@@ -757,6 +869,7 @@ defmodule Wamp.Router do
         state
     end
 
+    @doc false
     def __terminate__({sid, details, reason}, state) do
         session = 
             Map.get(state, :sessions)
