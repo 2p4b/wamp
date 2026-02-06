@@ -20,7 +20,7 @@ Add `wamp` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
     [
-        {:wamp, "~> 0.1.0"}
+        {:wamp, "~> 0.1.1"}
     ]
 end
 ```
