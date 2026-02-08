@@ -415,9 +415,9 @@ defmodule Wamp.Router do
 
             def session(id, prop \\ nil) when is_integer(id) and is_atom(prop) do
                 if is_nil(prop) do
-                    get([:sesions, id])
+                    get([:sessions, id])
                 else
-                    get([:sesions, id, prop])
+                    get([:sessions, id, prop])
                 end
             end
 
