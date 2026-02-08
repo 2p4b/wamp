@@ -353,6 +353,35 @@ defmodule Wamp.Router do
             end
 
             @impl true
+            def handle_call({:get, path}, _from, state) when is_list(path) do
+                value =
+                    path
+                    |> List.wrap()
+                    |> Enum.reduce(state, fn pfrag, acc -> 
+                        cond do
+                            is_list(acc) ->
+                                Enum.find(acc, fn val ->
+                                    case val do
+                                        %{id: id} ->
+                                            id == pfrag
+                                        rest ->
+                                            rest
+                                    end
+                                end)
+                            is_map(acc) ->
+                                Map.get(acc, pfrag)
+
+                            match?({:error, :path, _}, acc) ->
+                                {:error, :path, elem(acc, 2) ++ [pfrag]}
+
+                            true ->
+                                {:error, :path, [pfrag]}
+                        end
+                    end)
+                {:reply, value, state}
+            end
+
+            @impl true
             def handle_call({:get, prop}, _from, state) when is_atom(prop) do
                 {:reply, Map.get(state, prop), state}
             end
@@ -382,6 +411,14 @@ defmodule Wamp.Router do
 
             def get(prop) when is_atom(prop) do
                 GenServer.call(__MODULE__, {:get, prop})
+            end
+
+            def session(id, prop \\ nil) when is_integer(id) and is_atom(prop) do
+                if is_nil(prop) do
+                    get([:sesions, id])
+                else
+                    get([:sesions, id, prop])
+                end
             end
 
             def state(prop\\ nil) when is_nil(prop) or is_atom(prop) do 
