@@ -58,19 +58,33 @@ end
 
 ### 3. Implement Procedure Handlers
 
-Procedure handler functions receive `(args, kwargs, details)`:
+Procedure handler functions receive `(args, kwargs, details)` and must return a tagged tuple:
 
 ```elixir
 defmodule MyApp.Math do
     def add(args, _kwargs, _details) do
-        Enum.sum(args)
+        {:ok, [Enum.sum(args)]}
     end
 
     def multiply([a, b], _kwargs, _details) do
-        a * b
+        {:ok, [a * b]}
+    end
+
+    def divide([a, b], _kwargs, _details) do
+        {:ok, [a / b], %{"remainder" => rem(a, b)}}
     end
 end
 ```
+
+Accepted return types:
+
+| Return | Description |
+|--------|-------------|
+| `{:ok, args}` | Success with a list of positional arguments |
+| `{:ok, args, kwargs}` | Success with positional arguments and a keyword map |
+| `{:error, uri}` | Error with a WAMP error URI |
+| `{:error, uri, args}` | Error with URI and positional arguments |
+| `{:error, uri, args, kwargs}` | Error with URI, positional arguments, and keyword map |
 
 ### 4. Implement Event Subscribers
 
@@ -206,7 +220,19 @@ MyApp.Client.publish("topic", args, %{}, %{"eligible_authrole" => ["admin"]})
 
 ### Error Handling in Procedures
 
-Raise `Wamp.Client.InvocationError` to return a structured error to the caller:
+Return an `{:error, uri, ...}` tuple to signal an error to the caller:
+
+```elixir
+def divide([a, b], _kwargs, _details) do
+    if b == 0 do
+        {:error, "com.myapp.error.division_by_zero", ["Cannot divide by zero"]}
+    else
+        {:ok, [a / b]}
+    end
+end
+```
+
+Alternatively, raise `Wamp.Client.InvocationError` for exception-based error handling:
 
 ```elixir
 def divide([a, b], _kwargs, _details) do
@@ -216,7 +242,7 @@ def divide([a, b], _kwargs, _details) do
             args: ["Cannot divide by zero"],
             kwargs: %{}
     end
-    a / b
+    {:ok, [a / b]}
 end
 ```
 
