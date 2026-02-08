@@ -9,7 +9,7 @@ An Elixir implementation of the [WAMP (Web Application Messaging Protocol)](http
 - **Phoenix Integration** - WebSocket transport adapter for Phoenix
 - **Extensible Architecture** - Custom broker and dealer modules via behaviours
 - **Authentication** - Pluggable challenge-response authentication (anonymous, ticket, WAMP-CRA, SCRAM)
-- **Subscriber Filtering** - Black/white listing by session ID, auth ID, or auth role
+- **Subscriber Filtering** - Allow/Deny listing by session ID, auth ID, or auth role
 - **Call Cancellation** - Cancel in-flight RPC calls with skip, kill, or killnowait modes
 - **Shared Registration** - Multiple callees can register the same procedure URI
 
@@ -20,7 +20,7 @@ Add `wamp` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
     [
-        {:wamp, "~> 0.1.1"}
+        {:wamp, "~> 0.2.0"}
     ]
 end
 ```
