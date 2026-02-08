@@ -1038,18 +1038,8 @@ defmodule Wamp.Client do
 
             payload = 
                 case res do
-                    {:ok, result} ->
-                        cond do
-
-                            is_map(result) ->
-                                [@yield, inv.request, %{}, [], result]
-
-                            is_list(result) ->
-                                [@yield, inv.request, %{}, result, %{}]
-
-                            true ->
-                                [@yield, inv.request, %{}, [result], %{}]
-                        end
+                    {:ok, {args, kwargs}} ->
+                        [@yield, inv.request, %{}, args, kwargs]
 
                     {:error, uri, args, kwargs} ->
                         [@error, @invocation, inv.request, %{}, uri, args, kwargs]
@@ -1685,7 +1675,25 @@ defmodule Wamp.Client do
 
         response = 
             try do
-                {:ok, apply(module, fun, [args, kwargs, details])}
+                case apply(module, fun, [args, kwargs, details]) do
+                    {:ok, args} when is_list(args) -> 
+                          {:ok, {args, %{}}}
+
+                    {:ok, args, kwargs} when is_list(args) and is_map(kwargs) -> 
+                          {:ok, {args, kwargs}}
+
+                    {:ok, args} -> 
+                          {:ok, {List.wrap(args), kwargs}}
+
+                    {:error, uri} when is_binary(uri) ->
+                          {:error, uri, [], %{}}
+
+                    {:error, uri, args} when is_binary(uri) and is_list(args) ->
+                          {:error, uri, args, %{}}
+
+                    {:error, uri, args, kwargs} when is_binary(uri) and is_list(args) and is_map(kwargs) ->
+                          {:error, uri, args, kwargs}
+                end
             rescue
                 error in Wamp.Client.InvocationError ->
                     {:error, error.uri, error.args, error.kwargs} 
