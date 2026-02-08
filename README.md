@@ -320,9 +320,12 @@ defmodule MyApp.Dealer do
         end
     end
 
-    def procedure({uri, call}, caller, procedures) do
-        # Implement load balancing, routing, etc.
+    def select({uri, call}, procedures, caller) do
+        # Select which callee handles the call
+        # Implement round-robin, load balancing, etc.
         {:ok, Enum.random(procedures)}
+        # Or return custom invocation details:
+        # {:ok, proc, %{callee: caller.id}}
     end
 
     def unregistered(_procedure) do

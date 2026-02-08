@@ -17,9 +17,9 @@ defmodule Wamp.Example.Dealer do
             {:ok, nil}
           end
 
-          def procedure({uri, call}, caller, procedures) do
+          def select({uri, call}, procedures, caller) do
             # Select which registered callee should handle the call
-            # Implement round-robin, load balancing, etc.
+            # Return {:ok, proc} or {:ok, proc, details}
             {:ok, List.first(procedures)}
           end
 
