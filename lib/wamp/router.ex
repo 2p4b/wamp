@@ -409,7 +409,7 @@ defmodule Wamp.Router do
                 send(__MODULE__, {message, self()}) 
             end
 
-            def get(prop) when is_atom(prop) do
+            def get(prop) when is_atom(prop) or is_list(prop) do
                 GenServer.call(__MODULE__, {:get, prop})
             end
 
