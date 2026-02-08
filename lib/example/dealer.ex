@@ -36,10 +36,18 @@ defmodule Wamp.Example.Dealer do
         {:ok, nil}
     end
 
-    @doc "Selects the first registered procedure for invocation."
-    def procedure({_topic, _call}, _caller, [proc | _]) do
+    @doc """
+        Selects the first registered procedure for invocation and disclose
+        the caller to the callee selectively
+    """
+    def select({_topic, _call}, [%{uri: "wamp." <> _rest} = proc], %{id: id}) do
+        {:ok, proc, %{callee: id}}
+    end
+
+    def select({_topic, _call}, [proc | _],  _caller_session) do
         { :ok, proc}
     end
+
 
     @doc "No-op cleanup after unregistration."
     def unregistered(_) do

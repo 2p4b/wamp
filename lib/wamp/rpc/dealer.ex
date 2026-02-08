@@ -324,16 +324,30 @@ defmodule Wamp.RPC.Dealer do
                     kwargs: kwargs,
                 }
 
-                case apply(state.dealer, :procedure, [{uri, call}, session, procs]) do
+                choice = 
+                    case apply(state.dealer, :select, [{uri, call}, procs, session]) do
+                        {:ok, proc} ->
+                            {:ok, proc, opts}
 
-                    {:ok, %{id: regid, sid: callee_sid} } ->
+                        {:ok, proc, details} ->
+                            {:ok, proc, details}
+
+                        other ->
+                            other
+                    end
+
+
+
+                case choice do
+
+                    {:ok, %{id: regid, sid: callee_sid}, details} ->
 
                         details = 
                             case opts do
                                 %{"disclose_me" => true} ->
-                                    %{caller: sid}
-
-                                _ -> %{}
+                                    Map.put(details, :caller, sid)
+                                _ -> 
+                                    details
                             end
 
                         details =

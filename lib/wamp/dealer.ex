@@ -5,7 +5,7 @@ defmodule Wamp.Dealer do
 
     @callback register({topic :: String.t(),  opts :: map},  session :: session) :: {:ok, any } | {:error, uri :: String.t()}
 
-    @callback procedure({uri :: String.t(), call :: map},  caller :: session, procedures :: [ procedure ]) :: { :ok,  procedure } | {:error, uri :: String.t()}
+    @callback select({uri :: String.t(), call :: map}, procedures :: [ procedure ], caller :: session) :: { :ok,  procedure } | {:error, uri :: String.t()}
 
     @callback unregistered(procedure :: procedure) :: any
 
