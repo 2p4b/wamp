@@ -29,8 +29,9 @@ defmodule Wamp.Client do
 
     ## Macros
 
-      * `procedure(uri, module, function)` - Register a procedure handler that is
-        automatically registered when the client connects
+      * `procedure(uri, module, function, opts \\\\ %{})` - Register a procedure handler that is
+        automatically registered when the client connects. The optional `opts` map can
+        specify registration options such as `%{"invoke" => "roundrobin"}`
       * `channel(uri, subscriber_module)` - Subscribe to a topic that is
         automatically subscribed when the client connects
 
@@ -750,9 +751,13 @@ defmodule Wamp.Client do
     The function must accept `(args, kwargs, details)` as arguments and return
     the result value.
 
+    An optional fourth argument `opts` (a map) can be passed to provide WAMP
+    registration options such as invocation policy. Defaults to `%{}`.
+
     ## Example
 
         procedure "com.example.add", MyApp.Math, :add
+        procedure "com.example.add", MyApp.Math, :add, %{"invoke" => "roundrobin"}
     """
     defmacro procedure(uri, module, fun, opts \\ {:%{},[], []}) do
         module = tear_alias(module)

@@ -51,6 +51,9 @@ defmodule MyApp.Client do
     procedure "com.myapp.add", MyApp.Math, :add
     procedure "com.myapp.multiply", MyApp.Math, :multiply
 
+    # Auto-register with options (e.g. shared registration)
+    procedure "com.myapp.echo", MyApp.Handlers, :echo, %{"invoke" => "roundrobin"}
+
     # Auto-subscribe to topics on connect
     channel "com.myapp.events", MyApp.EventHandler
 end
