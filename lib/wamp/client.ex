@@ -754,10 +754,10 @@ defmodule Wamp.Client do
 
         procedure "com.example.add", MyApp.Math, :add
     """
-    defmacro procedure(uri, module, fun) do
+    defmacro procedure(uri, module, fun, opts \\ {:%{},[], []}) do
         module = tear_alias(module)
         quote do
-            @procedures {unquote(uri), unquote(module), unquote(fun)}
+            @procedures {unquote(uri), unquote(module), unquote(fun), unquote(opts)}
         end
     end
 
@@ -809,8 +809,8 @@ defmodule Wamp.Client do
 
         state = 
             procedures
-            |> Enum.reduce(state, fn {uri, module, fun}, state -> 
-                procedure = {uri, %{}, {module, fun}}
+            |> Enum.reduce(state, fn {uri, module, fun, dets}, state -> 
+                procedure = {uri, dets, {module, fun}}
                 {_, state} = __handle_register__(procedure, state)
                 state
             end)
