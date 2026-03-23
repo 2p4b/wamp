@@ -1682,7 +1682,7 @@ defmodule Wamp.Client do
             try do
                 case apply(module, fun, [args, kwargs, details]) do
                     {:ok, args} when is_list(args) -> 
-                          {:ok, {[args], %{}}}
+                          {:ok, {args, %{}}}
 
                     {:ok, args, kwargs} when is_list(args) and is_map(kwargs) -> 
                           {:ok, {args, kwargs}}
