@@ -29,51 +29,80 @@ defmodule Wamp.Client do
 
     ## Macros
 
-      * `procedure(uri, module, function, opts \\\\ %{})` - Register a procedure handler that is
-        automatically registered when the client connects. The optional `opts` map can
-        specify registration options such as `%{"invoke" => "roundrobin"}`
+      * `procedure(uri, module, function, opts \\\\ %{})` - Register a procedure handler that
+        is automatically registered when the client connects. The optional `opts` map can
+        specify registration options such as `%{"invoke" => "roundrobin"}`.
       * `channel(uri, subscriber_module)` - Subscribe to a topic that is
-        automatically subscribed when the client connects
+        automatically subscribed when the client connects.
+
+    ## Optional Client Argument
+
+    All public functions accept an optional `client` as the first argument. The client
+    can be a registered name (atom), a pid, or a via/global tuple. When omitted, the
+    calling module (`__MODULE__`) is used as the default.
+
+        # Using the default client (MyApp.Client itself)
+        MyApp.Client.call("com.myapp.add", [1, 2])
+
+        # Passing an explicit client
+        MyApp.Client.call(client_pid, "com.myapp.add", [1, 2])
+        MyApp.Client.call({:via, Registry, key}, "com.myapp.add", [1, 2])
 
     ## Public Functions (injected via `use`)
 
     ### Connection
 
-      * `start_link/1` - Start and connect the client
-      * `state/1` - Get client state or a specific section
-      * `goodbye/1` - Gracefully disconnect from the router
+      * `start_link/1` - Start and connect the client.
+      * `state/1` - Get client state or a specific section.
+      * `goodbye/1` - Gracefully disconnect from the router.
 
     ### Remote Procedure Calls
 
-      * `call/2` - Call a procedure with positional args
-      * `call/2` - Call a procedure with keyword args (map)
-      * `call/3` - Call a procedure with both args and kwargs
-      * `register/3` - Register a procedure handler
-      * `unregister/1` - Unregister a procedure
-      * `registered/1` - Check if a procedure is registered
-      * `yield/1` - Get the result of a call
-      * `yielded/1` - Check if a call result is ready
-      * `await/1` - Block until a call result is available
+      * `call(uri, args)` - Call a procedure with positional args.
+      * `call(uri, kwargs)` - Call a procedure with keyword args.
+      * `call(uri, args, kwargs)` - Call a procedure with args and kwargs.
+      * `call(client, uri, args, kwargs)` - Call on an explicit client.
+      * `register(uri, proc)` - Register a procedure handler at runtime.
+      * `register(uri, proc, opts)` - Register with options.
+      * `register(client, uri, proc, opts)` - Register on an explicit client.
+      * `unregister(uri)` - Unregister a procedure.
+      * `unregister(client, uri)` - Unregister on an explicit client.
+      * `registered(uri)` - Check if a procedure URI is registered.
+      * `registered(client, uri)` - Check on an explicit client.
+      * `yield(reqid)` - Get the result of a completed call.
+      * `yield(client, reqid)` - Get the result on an explicit client.
+      * `yielded(reqid)` - Check if a call result is ready.
+      * `yielded(client, reqid)` - Check on an explicit client.
+      * `await(reqid)` - Block until a call result is available.
+      * `await(client, reqid)` - Block on an explicit client.
 
     ### Publish & Subscribe
 
-      * `subscribe/2` - Subscribe to a topic
-      * `unsubscribe/1` - Unsubscribe from a topic
-      * `subscribed/1` - Check if subscribed to a topic
-      * `subscriptions/0` - List all subscriptions
-      * `publish/2` - Publish an event (fire-and-forget)
-      * `publish/3` - Publish with kwargs
-      * `publish/4` - Publish with kwargs and options
-      * `ack_publish/2` - Publish and wait for acknowledgment
+      * `subscribe(topic)` - Subscribe to a topic.
+      * `subscribe(topic, opts)` - Subscribe with options.
+      * `subscribe(client, topic, opts)` - Subscribe on an explicit client.
+      * `unsubscribe(topic)` - Unsubscribe from a topic.
+      * `unsubscribe(client, topic)` - Unsubscribe on an explicit client.
+      * `subscribed(topic)` - Check if subscribed to a topic.
+      * `subscribed(client, topic)` - Check on an explicit client.
+      * `subscriptions/0` - List all active subscriptions.
+      * `publish(topic, args)` - Publish an event (fire and forget).
+      * `publish(topic, args, kwargs)` - Publish with keyword arguments.
+      * `publish(topic, args, kwargs, opts)` - Publish with options.
+      * `publish(client, topic, args, kwargs, opts)` - Publish on an explicit client.
+      * `ack_publish(topic, args)` - Publish and wait for broker acknowledgment.
+      * `ack_publish(topic, args, kwargs)` - Acknowledged publish with kwargs.
+      * `ack_publish(topic, args, kwargs, opts)` - Acknowledged publish with options.
+      * `ack_publish(client, topic, args, kwargs, opts)` - Acknowledged publish on an explicit client.
 
     ## Procedure Handlers
 
     Procedure handlers are `{module, function}` tuples. The function receives
-    `(args, kwargs, details)` and should return the result value. Raise
-    `Wamp.Client.InvocationError` to return a WAMP error:
+    `(args, kwargs, details)` and should return a tagged tuple. Raise
+    `Wamp.Client.InvocationError` to return a WAMP error to the caller.
 
         def add(args, _kwargs, _details) do
-          Enum.sum(args)
+          {:ok, [Enum.sum(args)]}
         end
 
         def divide([a, b], _kwargs, _details) do
@@ -82,7 +111,7 @@ defmodule Wamp.Client do
               uri: "com.error.division_by_zero",
               args: ["Cannot divide by zero"]
           end
-          a / b
+          {:ok, [a / b]}
         end
     """
 

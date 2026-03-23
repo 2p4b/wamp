@@ -161,19 +161,54 @@ The library is organized around these core modules:
 
 ## Usage
 
+### Optional Client Argument
+
+All public functions accept an optional `client` as the first argument. The client
+can be a registered name (atom), a pid, or a via/global tuple. When omitted, the
+calling module is used as the default.
+
+```elixir
+# Default client (MyApp.Client itself)
+MyApp.Client.call("com.myapp.add", [1, 2])
+
+# Explicit pid
+MyApp.Client.call(client_pid, "com.myapp.add", [1, 2])
+
+# Via registry
+MyApp.Client.call({:via, Registry, key}, "com.myapp.add", [1, 2])
+```
+
 ### Remote Procedure Calls
 
 ```elixir
 # Register a procedure at runtime
 MyApp.Client.register("com.myapp.echo", {MyApp.Handlers, :echo})
 
-# Call a procedure
+# Register with options
+MyApp.Client.register("com.myapp.echo", {MyApp.Handlers, :echo}, %{"invoke" => "roundrobin"})
+
+# Register on an explicit client
+MyApp.Client.register(client_pid, "com.myapp.echo", {MyApp.Handlers, :echo}, %{})
+
+# Call a procedure with positional args
 request_id = MyApp.Client.call("com.myapp.add", [1, 2])
+
+# Call with keyword args
+request_id = MyApp.Client.call("com.myapp.greet", %{"name" => "world"})
+
+# Call with both
+request_id = MyApp.Client.call("com.myapp.add", [1, 2], %{"round" => true})
+
+# Call on an explicit client
+request_id = MyApp.Client.call(client_pid, "com.myapp.add", [1, 2], %{})
 
 # Wait for the result
 {:ok, {[3], %{}}} = MyApp.Client.await(request_id)
 
-# Or check if result is ready
+# Wait on an explicit client
+{:ok, {[3], %{}}} = MyApp.Client.await(client_pid, request_id)
+
+# Check if result is ready
 case MyApp.Client.yielded(request_id) do
     true  -> MyApp.Client.yield(request_id)
     false -> # still pending
@@ -181,6 +216,9 @@ end
 
 # Unregister
 MyApp.Client.unregister("com.myapp.echo")
+
+# Unregister on an explicit client
+MyApp.Client.unregister(client_pid, "com.myapp.echo")
 ```
 
 ### Publish & Subscribe
@@ -189,17 +227,32 @@ MyApp.Client.unregister("com.myapp.echo")
 # Subscribe to a topic
 MyApp.Client.subscribe("com.myapp.events")
 
-# Publish an event (fire-and-forget)
+# Subscribe with options
+MyApp.Client.subscribe("com.myapp.events", %{"match" => "prefix"})
+
+# Subscribe on an explicit client
+MyApp.Client.subscribe(client_pid, "com.myapp.events", %{})
+
+# Publish an event (fire and forget)
 MyApp.Client.publish("com.myapp.events", ["hello"])
 
 # Publish with keyword arguments
 MyApp.Client.publish("com.myapp.events", [], %{"message" => "hello"})
+
+# Publish with options
+MyApp.Client.publish("com.myapp.events", ["hello"], %{}, %{"exclude_me" => true})
+
+# Publish on an explicit client
+MyApp.Client.publish(client_pid, "com.myapp.events", ["hello"], %{}, %{})
 
 # Publish with acknowledgment
 {:ok, publication_id} = MyApp.Client.ack_publish("com.myapp.events", ["hello"])
 
 # Unsubscribe
 MyApp.Client.unsubscribe("com.myapp.events")
+
+# Unsubscribe on an explicit client
+MyApp.Client.unsubscribe(client_pid, "com.myapp.events")
 ```
 
 ### Publishing Options
