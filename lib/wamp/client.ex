@@ -632,7 +632,7 @@ defmodule Wamp.Client do
                 call(__MODULE__, uri, args, kwargs)
             end
             def call(client, uri, args, kwargs)
-            when is_atom(client) and is_binary(uri) and is_list(args) and is_map(kwargs) do
+            when (is_atom(client) or is_pid(client) or is_tuple(client)) and is_binary(uri) and is_list(args) and is_map(kwargs) do
                 GenServer.call(client, {@call, %{}, uri, args, kwargs})
             end
 
@@ -644,11 +644,11 @@ defmodule Wamp.Client do
             def subscribe(topic, opts, nil) when is_binary(topic) and is_map(opts) do
                 subscribe(__MODULE__, topic, opts)
             end
-            def subscribe(client, topic, nil) when is_atom(client) and is_binary(topic) do
+            def subscribe(client, topic, nil) when (is_atom(client) or is_pid(client) or is_tuple(client)) and is_binary(topic) do
                 subscribe(client, topic, %{})
             end
             def subscribe(client, topic, opts)
-            when is_atom(client) and is_binary(topic) and is_map(opts) do
+            when (is_atom(client) or is_pid(client) or is_tuple(client)) and is_binary(topic) and is_map(opts) do
                 GenServer.call(client, {@subscribe, opts, topic})
             end
 
@@ -664,7 +664,7 @@ defmodule Wamp.Client do
                 publish(__MODULE__, topic, args, kwargs, opts)
             end
             def publish(client, topic, args, kwargs, opts)
-            when is_atom(client) and is_binary(topic) and is_list(args) and is_map(kwargs) and is_map(opts) do
+            when (is_atom(client) or is_pid(client) or is_tuple(client)) and is_binary(topic) and is_list(args) and is_map(kwargs) and is_map(opts) do
                 opts = Map.delete(opts, "acknowledge")
                 GenServer.call(client, {@publish, opts, topic, args, kwargs})
             end
@@ -681,7 +681,7 @@ defmodule Wamp.Client do
                 ack_publish(__MODULE__, topic, args, kwargs, opts)
             end
             def ack_publish(client, topic, args, kwargs, opts)
-            when is_atom(client) and is_binary(topic) and is_list(args) and is_map(kwargs) and is_map(opts) do
+            when (is_atom(client) or is_pid(client) or is_tuple(client)) and is_binary(topic) and is_list(args) and is_map(kwargs) and is_map(opts) do
                 opts = Map.put(opts, "acknowledge", true)
                 reqid = GenServer.call(client, {@publish, opts, topic, args, kwargs})
                 await_acknowledgment(client, reqid)
@@ -708,7 +708,7 @@ defmodule Wamp.Client do
             def unsubscribe(topic, nil) when is_binary(topic) do
                 unsubscribe(__MODULE__, topic)
             end
-            def unsubscribe(client, topic) when is_atom(client) and is_binary(topic) do
+            def unsubscribe(client, topic) when (is_atom(client) or is_pid(client) or is_tuple(client)) and is_binary(topic) do
                 GenServer.call(client, {@unsubscribe, topic})
             end
 
@@ -721,7 +721,7 @@ defmodule Wamp.Client do
                 register(__MODULE__, uri, proc, opts)
             end
             def register(client, uri, proc, opts)
-            when is_atom(client) and is_binary(uri) and is_tuple(proc) and is_map(opts) do
+            when (is_atom(client) or is_pid(client) or is_tuple(client)) and is_binary(uri) and is_tuple(proc) and is_map(opts) do
                 GenServer.call(client, {@register, opts, uri, proc})
             end
 
@@ -730,7 +730,7 @@ defmodule Wamp.Client do
             def unregister(uri, nil) when is_binary(uri) do
                 unregister(__MODULE__, uri)
             end
-            def unregister(client, uri) when is_atom(client) and is_binary(uri) do
+            def unregister(client, uri) when (is_atom(client) or is_pid(client) or is_tuple(client)) and is_binary(uri) do
                 GenServer.call(client, {@unregister, uri})
             end
 
@@ -739,7 +739,7 @@ defmodule Wamp.Client do
             def registered(uri, nil) when is_binary(uri) do
                 registered(__MODULE__, uri)
             end
-            def registered(client, uri) when is_atom(client) and is_binary(uri) do
+            def registered(client, uri) when (is_atom(client) or is_pid(client) or is_tuple(client)) and is_binary(uri) do
                 GenServer.call(client, {:registered, uri})
             end
 
@@ -748,7 +748,7 @@ defmodule Wamp.Client do
             def subscribed(topic, nil) when is_binary(topic) do
                 subscribed(__MODULE__, topic)
             end
-            def subscribed(client, topic) when is_atom(client) and is_binary(topic) do
+            def subscribed(client, topic) when (is_atom(client) or is_pid(client) or is_tuple(client)) and is_binary(topic) do
                 GenServer.call(client, {:subscribed, topic})
             end
 
@@ -757,7 +757,7 @@ defmodule Wamp.Client do
             def yield(reqid, nil) when is_integer(reqid) do
                 yield(__MODULE__, reqid)
             end
-            def yield(client, reqid) when is_atom(client) and is_integer(reqid) do
+            def yield(client, reqid) when (is_atom(client) or is_pid(client) or is_tuple(client)) and is_integer(reqid) do
                 GenServer.call(client, {:result, reqid})
             end
 
@@ -766,7 +766,7 @@ defmodule Wamp.Client do
             def yielded(reqid, nil) when is_integer(reqid) do
                 yielded(__MODULE__, reqid)
             end
-            def yielded(client, reqid) when is_atom(client) and is_integer(reqid) do
+            def yielded(client, reqid) when (is_atom(client) or is_pid(client) or is_tuple(client)) and is_integer(reqid) do
                 case GenServer.call(client, {:call_status, reqid}) do
                     :yielded -> true
                     :error   -> true
@@ -780,7 +780,7 @@ defmodule Wamp.Client do
             def await(reqid, nil) when is_integer(reqid) do
                 await(__MODULE__, reqid)
             end
-            def await(client, reqid) when is_atom(client) and is_integer(reqid) do
+            def await(client, reqid) when (is_atom(client) or is_pid(client) or is_tuple(client)) and is_integer(reqid) do
                 case yielded(client, reqid) do
                     true  -> yield(client, reqid)
                     false -> await(client, reqid)
