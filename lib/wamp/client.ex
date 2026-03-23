@@ -1703,9 +1703,10 @@ defmodule Wamp.Client do
                 error in Wamp.Client.InvocationError ->
                     {:error, error.uri, error.args, error.kwargs} 
 
-                exception -> 
+                exception ->
                     message = Exception.message(exception)
-                    {:error, "wamp.invocation.error", [message], %{}}
+                    stacktrace = __STACKTRACE__ |> Exception.format_stacktrace() |> String.trim()
+                    {:error, "wamp.invocation.error", [message], %{"stacktrace" => stacktrace}}
             end
 
         GenServer.call(client, {@yield, response})
