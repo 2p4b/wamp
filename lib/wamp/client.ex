@@ -124,8 +124,6 @@ defmodule Wamp.Client do
 
         otp_app = Keyword.get(opts, :otp_app)
 
-        conn = Keyword.get(opts, :connection, __MODULE__)
-
         quote do
 
             import Wamp.Client
@@ -135,8 +133,6 @@ defmodule Wamp.Client do
             use GenServer
 
             @before_compile Wamp.Client
-
-            @conn unquote(conn)
 
             @otp_app unquote(otp_app)
 
@@ -187,6 +183,7 @@ defmodule Wamp.Client do
                 state = %{ 
                     id: nil,
                     pid: pid,
+                    args: args,
                     realm: Keyword.get(args, :realm),
                     status: :disconnected,
                     router: Keyword.get(args, :router),
@@ -194,6 +191,7 @@ defmodule Wamp.Client do
                     details: %{},
                     calls: [],
                     events: [],
+                    client: __MODULE__,
                     results: [],
                     procedures: [],
                     invocations: [],
@@ -279,7 +277,7 @@ defmodule Wamp.Client do
             @impl true
             def handle_call(:connect, _from, state) do
                 {reply, state} = 
-                    apply(Wamp.Client, :__handle_connect__, [state, @conn])
+                    apply(Wamp.Client, :__handle_connect__, [state])
                 {:reply, reply, state}
             end
 
@@ -622,82 +620,120 @@ defmodule Wamp.Client do
                 GenServer.call(__MODULE__, :subscriptions)
             end
 
-            def call(uri, args) 
-            when is_list(args) and is_binary(uri) do
-                call(uri, args, %{})
+            def call(client \\ nil, uri, args_or_kwargs_or_opts \\ nil, kwargs_or_opts \\ nil, opts \\ nil)
+
+            def call(uri, args, nil, nil, nil)
+            when is_binary(uri) and is_list(args) do
+                call(__MODULE__, uri, args, %{}, %{})
             end
 
-            def call(uri, kwargs) 
-            when is_map(kwargs) and is_binary(uri) do
-                call(uri, [], kwargs)
+            def call(uri, kwargs, nil, nil, nil)
+            when is_binary(uri) and is_map(kwargs) do
+                call(__MODULE__, uri, [], kwargs, %{})
             end
 
-            def call(uri, args, kwargs) 
+            def call(uri, args, kwargs, nil, nil)
             when is_binary(uri) and is_list(args) and is_map(kwargs) do
-                GenServer.call(__MODULE__, {@call, %{}, uri, args, kwargs})
+                call(__MODULE__, uri, args, kwargs, %{})
             end
 
-            def subscribe(topic, opts \\ %{}) when is_binary(topic) do
-                GenServer.call(__MODULE__, {@subscribe, opts, topic})
+            def call(client, uri, args, nil, nil)
+            when is_atom(client) and is_binary(uri) and is_list(args) do
+                call(client, uri, args, %{}, %{})
+            end
+
+            def call(client, uri, kwargs, nil, nil)
+            when is_atom(client) and is_binary(uri) and is_map(kwargs) do
+                call(client, uri, [], kwargs, %{})
+            end
+
+            def call(client, uri, args, kwargs, nil)
+            when is_atom(client) and is_binary(uri) and is_list(args) and is_map(kwargs) do
+                call(client, uri, args, kwargs, %{})
+            end
+
+            def call(client, uri, args, kwargs, opts)
+            when is_atom(client) and is_binary(uri) and is_list(args) and is_map(kwargs) and is_map(opts) do
+                GenServer.call(client, {@call, opts, uri, args, kwargs})
+            end
+
+            def subscribe(client \\ nil, topic, opts \\ %{})
+
+            def subscribe(nil, topic, opts) when is_binary(topic) do
+                subscribe(__MODULE__, topic, opts)
+            end
+
+            def subscribe(client, topic, opts)
+            when is_atom(client) and is_binary(topic) and is_map(opts) do
+                GenServer.call(client, {@subscribe, opts, topic})
             end
 
             def publish(topic, args) do
-                publish(topic, args, %{}, %{})
+                publish(__MODULE__, topic, args, %{}, %{})
             end
 
-            def publish(topic, args, kwargs) do
-                publish(topic, args, kwargs, %{})
+            def publish(topic, args, kwargs) when is_map(kwargs) do
+                publish(__MODULE__, topic, args, kwargs, %{})
             end
 
-            def publish(topic, args, kwargs, opts) 
+            def publish(topic, args, kwargs, opts)
             when is_binary(topic) and is_list(args) and is_map(kwargs) and is_map(opts) do
+                publish(__MODULE__, topic, args, kwargs, opts)
+            end
+
+            def publish(client, topic, args, kwargs, opts)
+            when is_atom(client) and is_binary(topic) and is_list(args) and is_map(kwargs) and is_map(opts) do
                 opts = Map.delete(opts, "acknowledge")
-                GenServer.call(__MODULE__, {@publish, opts, topic, args, kwargs})
+                GenServer.call(client, {@publish, opts, topic, args, kwargs})
             end
 
             def ack_publish(topic, args) do
-                ack_publish(topic, args, %{}, %{})
+                ack_publish(__MODULE__, topic, args, %{}, %{})
             end
 
-            def ack_publish(topic, args, kwargs) do
-                ack_publish(topic, args, kwargs, %{})
+            def ack_publish(topic, args, kwargs) when is_map(kwargs) do
+                ack_publish(__MODULE__, topic, args, kwargs, %{})
             end
 
-            def ack_publish(topic, args, kwargs, opts) 
+            def ack_publish(topic, args, kwargs, opts)
             when is_binary(topic) and is_list(args) and is_map(kwargs) and is_map(opts) do
-                opts = Map.put(opts, "acknowledge", true)
-                reqid = 
-                    GenServer.call(__MODULE__, {@publish, opts, topic, args, kwargs})
-                await_acknowledgment(reqid)
+                ack_publish(__MODULE__, topic, args, kwargs, opts)
             end
 
-            defp await_acknowledgment(reqid) do
-                case GenServer.call(__MODULE__, {:event_status, reqid}) do
+            def ack_publish(client, topic, args, kwargs, opts)
+            when is_atom(client) and is_binary(topic) and is_list(args) and is_map(kwargs) and is_map(opts) do
+                opts = Map.put(opts, "acknowledge", true)
+                reqid = GenServer.call(client, {@publish, opts, topic, args, kwargs})
+                await_acknowledgment(client, reqid)
+            end
+
+            defp await_acknowledgment(client, reqid) do
+                case GenServer.call(client, {:event_status, reqid}) do
                     :pending ->
-                        await_acknowledgment(reqid)
+                        await_acknowledgment(client, reqid)
 
                     :published ->
-                        GenServer.call(__MODULE__, {:publication, reqid})
+                        GenServer.call(client, {:publication, reqid})
 
                     :error ->
-                        GenServer.call(__MODULE__, {:publication, reqid})
+                        GenServer.call(client, {:publication, reqid})
 
                     error ->
                         error
                 end
             end
 
-            def unsubscribe(topic) when is_binary(topic) do
-                GenServer.call(__MODULE__, {@unsubscribe, topic})
+            def unsubscribe(client \\ __MODULE__, topic) when is_binary(topic) do
+                GenServer.call(client, {@unsubscribe, topic})
             end
 
-            def register(uri, {module, function} = proc, opts \\%{}) 
-            when is_atom(module) and is_atom(function) do
-                GenServer.call(__MODULE__, {@register, opts, uri,proc})
+            def register(client \\ __MODULE__, uri, {module, function} = proc, opts \\ %{})
+            when is_atom(client) and is_atom(module) and is_atom(function) do
+                GenServer.call(client, {@register, opts, uri, proc})
             end
 
-            def unregister(uri) do
-                GenServer.call(__MODULE__, {@unregister, uri})
+            def unregister(client \\ __MODULE__, uri) when is_binary(uri) do
+                GenServer.call(client, {@unregister, uri})
             end
 
             def registered(uri) when is_binary(uri) do
@@ -713,8 +749,14 @@ defmodule Wamp.Client do
                 GenServer.call(__MODULE__, {:result, reqid})
             end
 
-            def yielded(reqid) when is_integer(reqid) do
-                case GenServer.call(__MODULE__, {:call_status, reqid}) do
+            def yielded(client\\nil, reqid\\nil)
+            def yielded(nil, nil), do: :error
+            def yielded(reqid, nil) when is_integer(reqid) do
+                yielded(__MODULE__, reqid) 
+            end
+
+            def yielded(client, reqid) when is_integer(reqid) do
+                case GenServer.call(client, {:call_status, reqid}) do
                     :yielded ->
                         true
 
@@ -728,6 +770,7 @@ defmodule Wamp.Client do
                         error
                 end
             end
+
 
             def await(reqid) when is_integer(reqid) do
                 case yielded(reqid) do
@@ -782,16 +825,34 @@ defmodule Wamp.Client do
     end
 
     @doc false
-    defmacro __before_compile__(_env) do
+    defmacro __before_compile__(env) do
 
-        quote do
+        unless Module.defines?(env.module, {:connection, 1}) do
+            quote do
+                def connection(args) do 
+                    {:ok, %{
+                              id: __MODULE__, 
+                              args: args, 
+                              authid: __MODULE__,
+                              authrole: __MODULE__,
+                              authmethod: :elixir,
+                              authprovider: __MODULE__,
+                              authextra: %{}
+                        }}
+                end
 
-            defp __channels__, do: @channels
+                defp __channels__, do: @channels
 
-            defp __procedures__, do: @procedures
+                defp __procedures__, do: @procedures
+            end
 
+        else
+            quote do
+                defp __channels__, do: @channels
+
+                defp __procedures__, do: @procedures
+            end
         end
-
     end
 
     defp tear_alias({:__aliases__, meta, [h|t]}) do
@@ -842,13 +903,26 @@ defmodule Wamp.Client do
 
 
     @doc false
-    def __handle_connect__(state, conn) do
+    def __handle_connect__(state) do
+        args = Map.get(state, :args)
         realm = Map.get(state, :realm)
         roles = Map.get(state, :roles)
+        client = Map.get(state, :client)
+        with {:ok, conn} <- apply(client, :connection, [args]),
+             true <- is_map(conn) do
+            payload = [@hello, realm, roles, conn]
+            state = send_request(state, payload)
+            {{:ok, state.status}, state}
+        else
+            {:error, reason} ->
+                {{:error, reason}, state}
 
-        payload = [@hello, realm, roles, conn]
-        state = send_request(state, payload)
-        {{:ok, state.status}, state}
+            false ->
+                {{:error, :invalid_connection}, state}
+
+            error ->
+                {{:error, error}, state}
+        end
     end
 
     @doc false
